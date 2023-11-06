@@ -61,6 +61,10 @@ if(SAFETYHOOK_BUILD_TESTS) # build-tests
 
 endif()
 if(SAFETYHOOK_FETCH_ZYDIS) # fetch-zydis
+	option(ZYDIS_BUILD_EXAMPLES "" OFF)
+	option(ZYDIS_BUILD_TOOLS "" OFF)
+	option(ZYDIS_BUILD_DOXYGEN "" OFF)
+
 	message(STATUS "Fetching Zydis (v4.0.0)...")
 	FetchContent_Declare(Zydis
 		GIT_REPOSITORY
@@ -89,6 +93,8 @@ set(safetyhook_SOURCES
 	"src/inline_hook.cpp"
 	"src/mid_hook.cpp"
 	"src/thread_freezer.cpp"
+	"src/utility.cpp"
+	"src/vmt_hook.cpp"
 	cmake.toml
 )
 
@@ -425,6 +431,59 @@ if(SAFETYHOOK_BUILD_TESTS) # build-tests
 	endif()
 
 endif()
+# Target: test4
+if(SAFETYHOOK_BUILD_TESTS) # build-tests
+	set(test4_SOURCES
+		"tests/test4.cpp"
+		cmake.toml
+	)
+
+	add_library(test4 SHARED)
+
+	target_sources(test4 PRIVATE ${test4_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test4_SOURCES})
+
+	target_compile_features(test4 PUBLIC
+		cxx_std_23
+	)
+
+	if(MSVC) # msvc
+		target_compile_options(test4 PRIVATE
+			"/WX"
+			"/permissive-"
+			"/W4"
+			"/w14640"
+			"/EHsc"
+		)
+	endif()
+
+	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
+		target_compile_options(test4 PRIVATE
+			-Werror
+			-Wall
+			-Wextra
+			-Wshadow
+			-Wnon-virtual-dtor
+			-pedantic
+		)
+	endif()
+
+	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
+		target_compile_options(test4 PRIVATE
+			-Werror
+			-Wall
+			-Wextra
+			-Wshadow
+			-Wnon-virtual-dtor
+			-pedantic
+		)
+	endif()
+
+	target_link_libraries(test4 PUBLIC
+		safetyhook::safetyhook
+	)
+
+endif()
 # Target: unittest
 if(SAFETYHOOK_BUILD_TESTS) # build-tests
 	set(unittest_SOURCES
@@ -432,6 +491,7 @@ if(SAFETYHOOK_BUILD_TESTS) # build-tests
 		"unittest/inline_hook.cpp"
 		"unittest/inline_hook.x86_64.cpp"
 		"unittest/mid_hook.cpp"
+		"unittest/vmt_hook.cpp"
 		cmake.toml
 	)
 
@@ -500,6 +560,7 @@ if(SAFETYHOOK_BUILD_TESTS) # build-tests
 			"unittest/inline_hook.cpp"
 			"unittest/inline_hook.x86_64.cpp"
 			"unittest/mid_hook.cpp"
+			"unittest/vmt_hook.cpp"
 			"amalgamated-dist/safetyhook.cpp"
 			cmake.toml
 		)
