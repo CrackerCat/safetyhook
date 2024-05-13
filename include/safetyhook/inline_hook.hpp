@@ -3,15 +3,20 @@
 
 #pragma once
 
+#ifndef SAFETYHOOK_USE_CXXMODULES
 #include <cstdint>
 #include <expected>
 #include <memory>
 #include <mutex>
 #include <utility>
 #include <vector>
+#else
+import std.compat;
+#endif
 
-#include <safetyhook/allocator.hpp>
-#include <safetyhook/utility.hpp>
+#include "safetyhook/allocator.hpp"
+#include "safetyhook/common.hpp"
+#include "safetyhook/utility.hpp"
 
 namespace safetyhook {
 /// @brief An inline hook.
@@ -26,6 +31,8 @@ public:
             SHORT_JUMP_IN_TRAMPOLINE,              ///< The trampoline contains a short jump.
             IP_RELATIVE_INSTRUCTION_OUT_OF_RANGE,  ///< An IP-relative instruction is out of range.
             UNSUPPORTED_INSTRUCTION_IN_TRAMPOLINE, ///< An unsupported instruction was found in the trampoline.
+            FAILED_TO_UNPROTECT,                   ///< Failed to unprotect memory.
+            NOT_ENOUGH_SPACE,                      ///< Not enough space to create the hook.
         } type;
 
         /// @brief Extra information about the error.
@@ -68,6 +75,16 @@ public:
         [[nodiscard]] static Error unsupported_instruction_in_trampoline(uint8_t* ip) {
             return {.type = UNSUPPORTED_INSTRUCTION_IN_TRAMPOLINE, .ip = ip};
         }
+
+        /// @brief Create a FAILED_TO_UNPROTECT error.
+        /// @param ip The IP of the problematic instruction.
+        /// @return The new FAILED_TO_UNPROTECT error.
+        [[nodiscard]] static Error failed_to_unprotect(uint8_t* ip) { return {.type = FAILED_TO_UNPROTECT, .ip = ip}; }
+
+        /// @brief Create a NOT_ENOUGH_SPACE error.
+        /// @param ip The IP of the problematic instruction.
+        /// @return The new NOT_ENOUGH_SPACE error.
+        [[nodiscard]] static Error not_enough_space(uint8_t* ip) { return {.type = NOT_ENOUGH_SPACE, .ip = ip}; }
     };
 
     /// @brief Create an inline hook.
@@ -172,7 +189,7 @@ public:
     /// @note This function will use the __cdecl calling convention.
     template <typename RetT = void, typename... Args> RetT ccall(Args... args) {
         std::scoped_lock lock{m_mutex};
-        return m_trampoline ? original<RetT(__cdecl*)(Args...)>()(args...) : RetT();
+        return m_trampoline ? original<RetT(SAFETYHOOK_CCALL*)(Args...)>()(args...) : RetT();
     }
 
     /// @brief Calls the original function.
@@ -183,7 +200,7 @@ public:
     /// @note This function will use the __thiscall calling convention.
     template <typename RetT = void, typename... Args> RetT thiscall(Args... args) {
         std::scoped_lock lock{m_mutex};
-        return m_trampoline ? original<RetT(__thiscall*)(Args...)>()(args...) : RetT();
+        return m_trampoline ? original<RetT(SAFETYHOOK_THISCALL*)(Args...)>()(args...) : RetT();
     }
 
     /// @brief Calls the original function.
@@ -194,7 +211,7 @@ public:
     /// @note This function will use the __stdcall calling convention.
     template <typename RetT = void, typename... Args> RetT stdcall(Args... args) {
         std::scoped_lock lock{m_mutex};
-        return m_trampoline ? original<RetT(__stdcall*)(Args...)>()(args...) : RetT();
+        return m_trampoline ? original<RetT(SAFETYHOOK_STDCALL*)(Args...)>()(args...) : RetT();
     }
 
     /// @brief Calls the original function.
@@ -205,7 +222,7 @@ public:
     /// @note This function will use the __fastcall calling convention.
     template <typename RetT = void, typename... Args> RetT fastcall(Args... args) {
         std::scoped_lock lock{m_mutex};
-        return m_trampoline ? original<RetT(__fastcall*)(Args...)>()(args...) : RetT();
+        return m_trampoline ? original<RetT(SAFETYHOOK_FASTCALL*)(Args...)>()(args...) : RetT();
     }
 
     /// @brief Calls the original function.
@@ -229,7 +246,7 @@ public:
     /// @note This function is unsafe because it doesn't lock the mutex. Only use this if you don't care about unhook
     /// safety or are worried about the performance cost of locking the mutex.
     template <typename RetT = void, typename... Args> RetT unsafe_ccall(Args... args) {
-        return original<RetT(__cdecl*)(Args...)>()(args...);
+        return original<RetT(SAFETYHOOK_CCALL*)(Args...)>()(args...);
     }
 
     /// @brief Calls the original function.
@@ -241,7 +258,7 @@ public:
     /// @note This function is unsafe because it doesn't lock the mutex. Only use this if you don't care about unhook
     /// safety or are worried about the performance cost of locking the mutex.
     template <typename RetT = void, typename... Args> RetT unsafe_thiscall(Args... args) {
-        return original<RetT(__thiscall*)(Args...)>()(args...);
+        return original<RetT(SAFETYHOOK_THISCALL*)(Args...)>()(args...);
     }
 
     /// @brief Calls the original function.
@@ -253,7 +270,7 @@ public:
     /// @note This function is unsafe because it doesn't lock the mutex. Only use this if you don't care about unhook
     /// safety or are worried about the performance cost of locking the mutex.
     template <typename RetT = void, typename... Args> RetT unsafe_stdcall(Args... args) {
-        return original<RetT(__stdcall*)(Args...)>()(args...);
+        return original<RetT(SAFETYHOOK_STDCALL*)(Args...)>()(args...);
     }
 
     /// @brief Calls the original function.
@@ -265,7 +282,7 @@ public:
     /// @note This function is unsafe because it doesn't lock the mutex. Only use this if you don't care about unhook
     /// safety or are worried about the performance cost of locking the mutex.
     template <typename RetT = void, typename... Args> RetT unsafe_fastcall(Args... args) {
-        return original<RetT(__fastcall*)(Args...)>()(args...);
+        return original<RetT(SAFETYHOOK_FASTCALL*)(Args...)>()(args...);
     }
 
 private:
@@ -282,7 +299,7 @@ private:
         const std::shared_ptr<Allocator>& allocator, uint8_t* target, uint8_t* destination);
     std::expected<void, Error> e9_hook(const std::shared_ptr<Allocator>& allocator);
 
-#ifdef _M_X64
+#if SAFETYHOOK_ARCH_X86_64
     std::expected<void, Error> ff_hook(const std::shared_ptr<Allocator>& allocator);
 #endif
 

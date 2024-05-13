@@ -1,11 +1,12 @@
-#include <iostream>
+#include <print>
+#include <thread>
 
 #include <safetyhook.hpp>
 
 SafetyHookInline g_hook{};
 
-__declspec(noinline) void SayHello(int times) {
-    std::cout << "Hello #" << times << std::endl;
+SAFETYHOOK_NOINLINE void SayHello(int times) {
+    std::println("Hello #{}", times);
 }
 
 void Hooked_SayHello(int times [[maybe_unused]]) {

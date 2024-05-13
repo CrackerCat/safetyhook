@@ -26,28 +26,30 @@ endif()
 
 # Options
 option(SAFETYHOOK_BUILD_DOCS "" OFF)
-option(SAFETYHOOK_BUILD_TESTS "" OFF)
+option(SAFETYHOOK_BUILD_TEST "" OFF)
+option(SAFETYHOOK_BUILD_EXAMPLES "" OFF)
 option(SAFETYHOOK_AMALGAMATE "" OFF)
 option(SAFETYHOOK_FETCH_ZYDIS "" OFF)
+option(SAFETYHOOK_USE_CXXMODULES "" OFF)
 
 project(safetyhook)
 
 include(FetchContent)
 
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	message(STATUS "Fetching Catch2 (v3.3.2)...")
-	FetchContent_Declare(Catch2
+if(SAFETYHOOK_BUILD_TEST) # build-test
+	message(STATUS "Fetching ut (v2.0.1)...")
+	FetchContent_Declare(ut
 		GIT_REPOSITORY
-			"https://github.com/catchorg/Catch2.git"
+			"https://github.com/boost-ext/ut.git"
 		GIT_TAG
-			v3.3.2
+			v2.0.1
 		GIT_SHALLOW
 			ON
 	)
-	FetchContent_MakeAvailable(Catch2)
+	FetchContent_MakeAvailable(ut)
 
 endif()
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
+if(SAFETYHOOK_BUILD_TEST) # build-test
 	message(STATUS "Fetching xbyak (v6.69)...")
 	FetchContent_Declare(xbyak
 		GIT_REPOSITORY
@@ -92,7 +94,8 @@ set(safetyhook_SOURCES
 	"src/easy.cpp"
 	"src/inline_hook.cpp"
 	"src/mid_hook.cpp"
-	"src/thread_freezer.cpp"
+	"src/os.linux.cpp"
+	"src/os.windows.cpp"
 	"src/utility.cpp"
 	"src/vmt_hook.cpp"
 	cmake.toml
@@ -142,8 +145,12 @@ target_include_directories(safetyhook PUBLIC
 
 target_link_libraries(safetyhook PUBLIC
 	Zydis
-	ntdll
 )
+
+set(CMKR_TARGET safetyhook)
+if(SAFETYHOOK_USE_CXXMODULES)
+    target_compile_definitions(safetyhook INTERFACE SAFETYHOOK_USE_CXXMODULES)
+endif()
 
 # Target: docs
 if(SAFETYHOOK_BUILD_DOCS) # build-docs
@@ -199,434 +206,236 @@ if(SAFETYHOOK_AMALGAMATE) # amalgamate
 	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${amalgamation_SOURCES})
 
 endif()
-# Target: test0
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	set(test0_SOURCES
-		"tests/test0.cpp"
+# Target: example-minimal
+if(SAFETYHOOK_BUILD_EXAMPLES) # build-examples
+	set(example-minimal_SOURCES
+		"example/minimal.cpp"
 		cmake.toml
 	)
 
-	add_executable(test0)
+	add_executable(example-minimal)
 
-	target_sources(test0 PRIVATE ${test0_SOURCES})
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test0_SOURCES})
+	target_sources(example-minimal PRIVATE ${example-minimal_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example-minimal_SOURCES})
 
-	target_compile_features(test0 PRIVATE
+	target_compile_features(example-minimal PRIVATE
 		cxx_std_23
 	)
 
-	if(MSVC) # msvc
-		target_compile_options(test0 PRIVATE
-			"/WX"
-			"/permissive-"
-			"/W4"
-			"/w14640"
-			"/EHsc"
-		)
-	endif()
-
-	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
-		target_compile_options(test0 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
-		target_compile_options(test0 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	target_link_libraries(test0 PRIVATE
+	target_link_libraries(example-minimal PRIVATE
 		safetyhook::safetyhook
 	)
 
 	get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
 	if(NOT CMKR_VS_STARTUP_PROJECT)
-		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test0)
+		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT example-minimal)
 	endif()
 
 endif()
-# Target: test1
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	set(test1_SOURCES
-		"tests/test1.cpp"
+# Target: example-multiple
+if(SAFETYHOOK_BUILD_EXAMPLES) # build-examples
+	set(example-multiple_SOURCES
+		"example/multiple.cpp"
 		cmake.toml
 	)
 
-	add_executable(test1)
+	add_executable(example-multiple)
 
-	target_sources(test1 PRIVATE ${test1_SOURCES})
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test1_SOURCES})
+	target_sources(example-multiple PRIVATE ${example-multiple_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example-multiple_SOURCES})
 
-	target_compile_features(test1 PRIVATE
+	target_compile_features(example-multiple PRIVATE
 		cxx_std_23
 	)
 
-	if(MSVC) # msvc
-		target_compile_options(test1 PRIVATE
-			"/WX"
-			"/permissive-"
-			"/W4"
-			"/w14640"
-			"/EHsc"
-		)
-	endif()
-
-	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
-		target_compile_options(test1 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
-		target_compile_options(test1 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	target_link_libraries(test1 PRIVATE
+	target_link_libraries(example-multiple PRIVATE
 		safetyhook::safetyhook
 	)
 
 	get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
 	if(NOT CMKR_VS_STARTUP_PROJECT)
-		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test1)
+		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT example-multiple)
 	endif()
 
 endif()
-# Target: test2
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	set(test2_SOURCES
-		"tests/test2.cpp"
+# Target: example-midhook
+if(SAFETYHOOK_BUILD_EXAMPLES) # build-examples
+	set(example-midhook_SOURCES
+		"example/midhook.cpp"
 		cmake.toml
 	)
 
-	add_executable(test2)
+	add_executable(example-midhook)
 
-	target_sources(test2 PRIVATE ${test2_SOURCES})
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test2_SOURCES})
+	target_sources(example-midhook PRIVATE ${example-midhook_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example-midhook_SOURCES})
 
-	target_compile_features(test2 PRIVATE
+	target_compile_features(example-midhook PRIVATE
 		cxx_std_23
 	)
 
-	if(MSVC) # msvc
-		target_compile_options(test2 PRIVATE
-			"/WX"
-			"/permissive-"
-			"/W4"
-			"/w14640"
-			"/EHsc"
-		)
-	endif()
-
-	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
-		target_compile_options(test2 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
-		target_compile_options(test2 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	target_link_libraries(test2 PRIVATE
+	target_link_libraries(example-midhook PRIVATE
 		safetyhook::safetyhook
 	)
 
 	get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
 	if(NOT CMKR_VS_STARTUP_PROJECT)
-		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test2)
+		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT example-midhook)
 	endif()
 
 endif()
-# Target: test3
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	set(test3_SOURCES
-		"tests/test3.cpp"
+# Target: example-threadsafe
+if(SAFETYHOOK_BUILD_EXAMPLES) # build-examples
+	set(example-threadsafe_SOURCES
+		"example/threadsafe.cpp"
 		cmake.toml
 	)
 
-	add_executable(test3)
+	add_executable(example-threadsafe)
 
-	target_sources(test3 PRIVATE ${test3_SOURCES})
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test3_SOURCES})
+	target_sources(example-threadsafe PRIVATE ${example-threadsafe_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example-threadsafe_SOURCES})
 
-	target_compile_features(test3 PRIVATE
+	target_compile_features(example-threadsafe PRIVATE
 		cxx_std_23
 	)
 
-	if(MSVC) # msvc
-		target_compile_options(test3 PRIVATE
-			"/WX"
-			"/permissive-"
-			"/W4"
-			"/w14640"
-			"/EHsc"
-		)
-	endif()
-
-	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
-		target_compile_options(test3 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
-		target_compile_options(test3 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	target_link_libraries(test3 PRIVATE
+	target_link_libraries(example-threadsafe PRIVATE
 		safetyhook::safetyhook
 	)
 
 	get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
 	if(NOT CMKR_VS_STARTUP_PROJECT)
-		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test3)
+		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT example-threadsafe)
 	endif()
 
 endif()
-# Target: test4
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	set(test4_SOURCES
-		"tests/test4.cpp"
+# Target: example-dll
+if(SAFETYHOOK_BUILD_EXAMPLES AND WIN32) # windows-only-example
+	set(example-dll_SOURCES
+		"example/dll.cpp"
 		cmake.toml
 	)
 
-	add_library(test4 SHARED)
+	add_library(example-dll SHARED)
 
-	target_sources(test4 PRIVATE ${test4_SOURCES})
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test4_SOURCES})
+	target_sources(example-dll PRIVATE ${example-dll_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example-dll_SOURCES})
 
-	target_compile_features(test4 PUBLIC
+	target_compile_features(example-dll PUBLIC
 		cxx_std_23
 	)
 
-	if(MSVC) # msvc
-		target_compile_options(test4 PRIVATE
-			"/WX"
-			"/permissive-"
-			"/W4"
-			"/w14640"
-			"/EHsc"
-		)
-	endif()
-
-	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
-		target_compile_options(test4 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
-		target_compile_options(test4 PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	target_link_libraries(test4 PUBLIC
+	target_link_libraries(example-dll PUBLIC
 		safetyhook::safetyhook
 	)
 
 endif()
-# Target: unittest
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	set(unittest_SOURCES
-		"unittest/allocator.cpp"
-		"unittest/inline_hook.cpp"
-		"unittest/inline_hook.x86_64.cpp"
-		"unittest/mid_hook.cpp"
-		"unittest/vmt_hook.cpp"
+# Target: example-vmthook
+if(SAFETYHOOK_BUILD_EXAMPLES) # build-examples
+	set(example-vmthook_SOURCES
+		"example/vmthook.cpp"
 		cmake.toml
 	)
 
-	add_executable(unittest)
+	add_executable(example-vmthook)
 
-	target_sources(unittest PRIVATE ${unittest_SOURCES})
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${unittest_SOURCES})
+	target_sources(example-vmthook PRIVATE ${example-vmthook_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${example-vmthook_SOURCES})
 
-	target_compile_features(unittest PRIVATE
+	target_compile_features(example-vmthook PRIVATE
 		cxx_std_23
 	)
 
-	if(MSVC) # msvc
-		target_compile_options(unittest PRIVATE
-			"/WX"
-			"/permissive-"
-			"/W4"
-			"/w14640"
-			"/EHsc"
-		)
-	endif()
-
-	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
-		target_compile_options(unittest PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
-		target_compile_options(unittest PRIVATE
-			-Werror
-			-Wall
-			-Wextra
-			-Wshadow
-			-Wnon-virtual-dtor
-			-pedantic
-		)
-	endif()
-
-	target_link_libraries(unittest PRIVATE
+	target_link_libraries(example-vmthook PRIVATE
 		safetyhook::safetyhook
 	)
 
-	target_link_libraries(unittest PRIVATE
-		Catch2::Catch2WithMain
+	get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
+	if(NOT CMKR_VS_STARTUP_PROJECT)
+		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT example-vmthook)
+	endif()
+
+endif()
+# Target: test
+if(SAFETYHOOK_BUILD_TEST) # build-test
+	set(test_SOURCES
+		"test/allocator.cpp"
+		"test/inline_hook.cpp"
+		"test/inline_hook.x86_64.cpp"
+		"test/main.cpp"
+		"test/mid_hook.cpp"
+		"test/vmt_hook.cpp"
+		cmake.toml
+	)
+
+	add_executable(test)
+
+	target_sources(test PRIVATE ${test_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test_SOURCES})
+
+	target_compile_definitions(test PRIVATE
+		BOOST_UT_DISABLE_MODULE
+	)
+
+	target_compile_features(test PRIVATE
+		cxx_std_23
+	)
+
+	target_link_libraries(test PRIVATE
+		Boost::ut
 		safetyhook::safetyhook
 		xbyak::xbyak
 	)
 
 	get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
 	if(NOT CMKR_VS_STARTUP_PROJECT)
-		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT unittest)
+		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test)
 	endif()
 
 endif()
-# Target: unittest-amalgamated
-if(SAFETYHOOK_BUILD_TESTS) # build-tests
-	if(SAFETYHOOK_BUILD_TESTS AND SAFETYHOOK_AMALGAMATE) # build-amalgamate-tests
-		set(unittest-amalgamated_SOURCES
-			"unittest/allocator.cpp"
-			"unittest/inline_hook.cpp"
-			"unittest/inline_hook.x86_64.cpp"
-			"unittest/mid_hook.cpp"
-			"unittest/vmt_hook.cpp"
-			"amalgamated-dist/safetyhook.cpp"
-			cmake.toml
-		)
+# Target: test-amalgamated
+if(SAFETYHOOK_BUILD_TEST AND SAFETYHOOK_AMALGAMATE) # build-amalgamate-test
+	set(test-amalgamated_SOURCES
+		"test/allocator.cpp"
+		"test/inline_hook.cpp"
+		"test/inline_hook.x86_64.cpp"
+		"test/main.cpp"
+		"test/mid_hook.cpp"
+		"test/vmt_hook.cpp"
+		"amalgamated-dist/safetyhook.cpp"
+		cmake.toml
+	)
 
-		add_executable(unittest-amalgamated)
+	add_executable(test-amalgamated)
 
-		target_sources(unittest-amalgamated PRIVATE ${unittest-amalgamated_SOURCES})
-		source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${unittest-amalgamated_SOURCES})
+	target_sources(test-amalgamated PRIVATE ${test-amalgamated_SOURCES})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test-amalgamated_SOURCES})
 
-		target_compile_features(unittest-amalgamated PRIVATE
-			cxx_std_23
-		)
+	target_compile_definitions(test-amalgamated PRIVATE
+		BOOST_UT_DISABLE_MODULE
+	)
 
-		if(MSVC) # msvc
-			target_compile_options(unittest-amalgamated PRIVATE
-				"/WX"
-				"/permissive-"
-				"/W4"
-				"/w14640"
-				"/EHsc"
-			)
-		endif()
+	target_compile_features(test-amalgamated PRIVATE
+		cxx_std_23
+	)
 
-		if((CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$") OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_FRONTEND_VARIANT MATCHES "^MSVC$")) # clang
-			target_compile_options(unittest-amalgamated PRIVATE
-				-Werror
-				-Wall
-				-Wextra
-				-Wshadow
-				-Wnon-virtual-dtor
-				-pedantic
-			)
-		endif()
+	target_include_directories(test-amalgamated PRIVATE
+		"amalgamated-dist/"
+	)
 
-		if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
-			target_compile_options(unittest-amalgamated PRIVATE
-				-Werror
-				-Wall
-				-Wextra
-				-Wshadow
-				-Wnon-virtual-dtor
-				-pedantic
-			)
-		endif()
+	target_link_libraries(test-amalgamated PRIVATE
+		Zydis
+		Boost::ut
+		xbyak::xbyak
+	)
 
-		target_link_libraries(unittest-amalgamated PRIVATE
-			safetyhook::safetyhook
-		)
-
-		target_include_directories(unittest-amalgamated PRIVATE
-			"amalgamated-dist/"
-		)
-
-		target_link_libraries(unittest-amalgamated PRIVATE
-			Zydis
-			Catch2::Catch2WithMain
-			xbyak::xbyak
-		)
-
-		get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
-		if(NOT CMKR_VS_STARTUP_PROJECT)
-			set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT unittest-amalgamated)
-		endif()
-
-		set(CMKR_TARGET unittest-amalgamated)
-		add_dependencies(unittest-amalgamated Amalgamate)
-
+	get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
+	if(NOT CMKR_VS_STARTUP_PROJECT)
+		set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test-amalgamated)
 	endif()
+
+	set(CMKR_TARGET test-amalgamated)
+	add_dependencies(test-amalgamated Amalgamate)
+
 endif()

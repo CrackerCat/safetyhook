@@ -1,8 +1,6 @@
-#include <Windows.h>
+#include "safetyhook/os.hpp"
 
-#include <safetyhook/thread_freezer.hpp>
-
-#include <safetyhook/vmt_hook.hpp>
+#include "safetyhook/vmt_hook.hpp"
 
 namespace safetyhook {
 VmHook::VmHook(VmHook&& other) noexcept {
@@ -107,7 +105,7 @@ void VmtHook::remove(void* object) {
     const auto original_vmt = search->second;
 
     execute_while_frozen([&] {
-        if (IsBadWritePtr(object, sizeof(void*))) {
+        if (!vm_is_writable(reinterpret_cast<uint8_t*>(object), sizeof(void*))) {
             return;
         }
 
@@ -128,7 +126,7 @@ void VmtHook::reset() {
 void VmtHook::destroy() {
     execute_while_frozen([this] {
         for (const auto [object, original_vmt] : m_objects) {
-            if (IsBadWritePtr(object, sizeof(void*))) {
+            if (!vm_is_writable(reinterpret_cast<uint8_t*>(object), sizeof(void*))) {
                 return;
             }
 

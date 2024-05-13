@@ -2,7 +2,8 @@ bits 64
 
 ; save context
 push qword [rel trampoline]
-push rsp
+push rsp ; push trampoline rsp
+push rsp ; push original rsp (this gets fixed later)
 push rbp
 push rax
 push rbx
@@ -20,25 +21,30 @@ push r14
 push r15
 pushfq
 sub rsp, 256
-movdqu [rsp-240], xmm15
-movdqu [rsp-224], xmm14
-movdqu [rsp-208], xmm13
-movdqu [rsp-192], xmm12
-movdqu [rsp-176], xmm11
-movdqu [rsp-160], xmm10
-movdqu [rsp-144], xmm9
-movdqu [rsp-128], xmm8
-movdqu [rsp-112], xmm7
-movdqu [rsp-96], xmm6
-movdqu [rsp-80], xmm5
-movdqu [rsp-64], xmm4
-movdqu [rsp-48], xmm3
-movdqu [rsp-32], xmm2
-movdqu [rsp-16], xmm1
+movdqu [rsp+240], xmm15
+movdqu [rsp+224], xmm14
+movdqu [rsp+208], xmm13
+movdqu [rsp+192], xmm12
+movdqu [rsp+176], xmm11
+movdqu [rsp+160], xmm10
+movdqu [rsp+144], xmm9
+movdqu [rsp+128], xmm8
+movdqu [rsp+112], xmm7
+movdqu [rsp+96], xmm6
+movdqu [rsp+80], xmm5
+movdqu [rsp+64], xmm4
+movdqu [rsp+48], xmm3
+movdqu [rsp+32], xmm2
+movdqu [rsp+16], xmm1
 movdqu [rsp], xmm0
 
+; fix stored rsp.
+mov rdi, [rsp+384]
+add rdi, 16
+mov [rsp+384], rdi
+
 ; set destination parameter
-lea rcx, [rsp]
+lea rdi, [rsp]
 
 ; align stack, save original
 mov rbx, rsp
@@ -85,6 +91,7 @@ pop rcx
 pop rbx
 pop rax
 pop rbp
+lea rsp, [rsp+8] ; skip original rsp
 pop rsp
 ret
 

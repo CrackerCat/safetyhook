@@ -4,25 +4,29 @@ name = "safetyhook"
 
 [options]
 SAFETYHOOK_BUILD_DOCS = false
-SAFETYHOOK_BUILD_TESTS = false
+SAFETYHOOK_BUILD_TEST = false
+SAFETYHOOK_BUILD_EXAMPLES = false
 SAFETYHOOK_AMALGAMATE = false
 SAFETYHOOK_FETCH_ZYDIS = false
+SAFETYHOOK_USE_CXXMODULES = false
 
 [conditions]
 build-docs = "SAFETYHOOK_BUILD_DOCS"
-build-tests = "SAFETYHOOK_BUILD_TESTS"
+build-test = "SAFETYHOOK_BUILD_TEST"
+build-examples = "SAFETYHOOK_BUILD_EXAMPLES"
+windows-only-example = "SAFETYHOOK_BUILD_EXAMPLES AND WIN32"
 amalgamate = "SAFETYHOOK_AMALGAMATE"
-build-amalgamate-tests = "SAFETYHOOK_BUILD_TESTS AND SAFETYHOOK_AMALGAMATE"
+build-amalgamate-test = "SAFETYHOOK_BUILD_TEST AND SAFETYHOOK_AMALGAMATE"
 fetch-zydis = "SAFETYHOOK_FETCH_ZYDIS"
 
-[fetch-content.Catch2]
-condition = "build-tests"
-git = "https://github.com/catchorg/Catch2.git"
-tag = "v3.3.2"
+[fetch-content.ut]
+condition = "build-test"
+git = "https://github.com/boost-ext/ut.git"
+tag = "v2.0.1"
 shallow = true
 
 [fetch-content.xbyak]
-condition = "build-tests"
+condition = "build-test"
 git = "https://github.com/herumi/xbyak.git"
 tag = "v6.69"
 shallow = true
@@ -52,10 +56,15 @@ sources = ["src/*.cpp"]
 include-directories = ["include/"]
 compile-features = ["cxx_std_23"]
 alias = "safetyhook::safetyhook"
-link-libraries = ["Zydis", "ntdll"]
+link-libraries = ["Zydis"]
 msvc.private-compile-options = ["/permissive-", "/W4", "/w14640"]
 clang.private-compile-options = ["-Wall", "-Wextra", "-Wshadow", "-Wnon-virtual-dtor", "-pedantic"]
 gcc.private-compile-options = ["-Wall", "-Wextra", "-Wshadow", "-Wnon-virtual-dtor", "-pedantic"]
+cmake-after = """
+if(SAFETYHOOK_USE_CXXMODULES)
+    target_compile_definitions(safetyhook INTERFACE SAFETYHOOK_USE_CXXMODULES)
+endif()
+"""
 
 [target.docs]
 condition = "build-docs"
@@ -95,55 +104,58 @@ add_custom_command(
 add_custom_target(Amalgamate ALL DEPENDS ${AMALGAMATED_FILE} ${AMALGAMATED_HEADER})
 """
 
-[template.test]
-condition = "build-tests"
+[template.example]
+condition = "build-examples"
 type = "executable"
 link-libraries = ["safetyhook::safetyhook"]
 compile-features = ["cxx_std_23"]
-msvc.private-compile-options = ["/WX", "/permissive-", "/W4", "/w14640", "/EHsc"]
-clang.private-compile-options = ["-Werror", "-Wall", "-Wextra", "-Wshadow", "-Wnon-virtual-dtor", "-pedantic"]
-gcc.private-compile-options = ["-Werror", "-Wall", "-Wextra", "-Wshadow", "-Wnon-virtual-dtor", "-pedantic"]
 
-[template.test-dll]
-condition = "build-tests"
+[template.example-dll]
+condition = "windows-only-example"
 type = "shared"
 link-libraries = ["safetyhook::safetyhook"]
 compile-features = ["cxx_std_23"]
-msvc.private-compile-options = ["/WX", "/permissive-", "/W4", "/w14640", "/EHsc"]
-clang.private-compile-options = ["-Werror", "-Wall", "-Wextra", "-Wshadow", "-Wnon-virtual-dtor", "-pedantic"]
-gcc.private-compile-options = ["-Werror", "-Wall", "-Wextra", "-Wshadow", "-Wnon-virtual-dtor", "-pedantic"]
 
-[target.test0]
-type = "test"
-sources = ["tests/test0.cpp"]
+[target.example-minimal]
+type = "example"
+sources = ["example/minimal.cpp"]
 
-[target.test1]
-type = "test"
-sources = ["tests/test1.cpp"]
+[target.example-multiple]
+type = "example"
+sources = ["example/multiple.cpp"]
 
-[target.test2]
-type = "test"
-sources = ["tests/test2.cpp"]
+[target.example-midhook]
+type = "example"
+sources = ["example/midhook.cpp"]
 
-[target.test3]
-type = "test"
-sources = ["tests/test3.cpp"]
+[target.example-threadsafe]
+type = "example"
+sources = ["example/threadsafe.cpp"]
 
-[target.test4]
-type = "test-dll"
-sources = ["tests/test4.cpp"]
+[target.example-dll]
+type = "example-dll"
+sources = ["example/dll.cpp"]
 
-[target.unittest]
-type = "test"
-sources = ["unittest/*.cpp"]
-link-libraries = ["Catch2::Catch2WithMain", "safetyhook::safetyhook", "xbyak::xbyak"]
+[target.example-vmthook]
+type = "example"
+sources = ["example/vmthook.cpp"]
 
-[target.unittest-amalgamated]
-condition = "build-amalgamate-tests"
-type = "test"
-sources = ["unittest/*.cpp", "amalgamated-dist/safetyhook.cpp"]
+[target.test]
+condition = "build-test"
+type = "executable"
+sources = ["test/*.cpp"]
+link-libraries = ["Boost::ut", "safetyhook::safetyhook", "xbyak::xbyak"]
+compile-definitions = ["BOOST_UT_DISABLE_MODULE"]
+compile-features = ["cxx_std_23"]
+
+[target.test-amalgamated]
+condition = "build-amalgamate-test"
+type = "executable"
+sources = ["test/*.cpp", "amalgamated-dist/safetyhook.cpp"]
 include-directories = ["amalgamated-dist/"]
-link-libraries = ["Zydis", "Catch2::Catch2WithMain", "xbyak::xbyak"]
+link-libraries = ["Zydis", "Boost::ut", "xbyak::xbyak"]
+compile-definitions = ["BOOST_UT_DISABLE_MODULE"]
+compile-features = ["cxx_std_23"]
 cmake-after = """
-add_dependencies(unittest-amalgamated Amalgamate)
+add_dependencies(test-amalgamated Amalgamate)
 """

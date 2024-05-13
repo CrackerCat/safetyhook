@@ -1,35 +1,21 @@
 #include <iterator>
 
-#include <Windows.h>
-
-#if __has_include(<Zydis/Zydis.h>)
-#include <Zydis/Zydis.h>
-#elif __has_include(<Zydis.h>)
-#include <Zydis.h>
+#if __has_include("Zydis/Zydis.h")
+#include "Zydis/Zydis.h"
+#elif __has_include("Zydis.h")
+#include "Zydis.h"
 #else
 #error "Zydis not found"
 #endif
 
-#include <safetyhook/allocator.hpp>
-#include <safetyhook/thread_freezer.hpp>
-#include <safetyhook/utility.hpp>
+#include "safetyhook/allocator.hpp"
+#include "safetyhook/common.hpp"
+#include "safetyhook/os.hpp"
+#include "safetyhook/utility.hpp"
 
-#include <safetyhook/inline_hook.hpp>
+#include "safetyhook/inline_hook.hpp"
 
 namespace safetyhook {
-class UnprotectMemory {
-public:
-    UnprotectMemory(uint8_t* address, size_t size) : m_address{address}, m_size{size} {
-        VirtualProtect(m_address, m_size, PAGE_EXECUTE_READWRITE, &m_protect);
-    }
-
-    ~UnprotectMemory() { VirtualProtect(m_address, m_size, m_protect, &m_protect); }
-
-private:
-    uint8_t* m_address{};
-    size_t m_size{};
-    DWORD m_protect{};
-};
 
 #pragma pack(push, 1)
 struct JmpE9 {
@@ -37,7 +23,7 @@ struct JmpE9 {
     uint32_t offset{0};
 };
 
-#if defined(_M_X64)
+#if SAFETYHOOK_ARCH_X86_64
 struct JmpFF {
     uint8_t opcode0{0xFF};
     uint8_t opcode1{0x25};
@@ -54,7 +40,7 @@ struct TrampolineEpilogueFF {
     JmpFF jmp_to_original{};
     uint64_t original_address{};
 };
-#elif defined(_M_IX86)
+#elif SAFETYHOOK_ARCH_X86_32
 struct TrampolineEpilogueE9 {
     JmpE9 jmp_to_original{};
     JmpE9 jmp_to_destination{};
@@ -62,7 +48,7 @@ struct TrampolineEpilogueE9 {
 #endif
 #pragma pack(pop)
 
-#ifdef _M_X64
+#if SAFETYHOOK_ARCH_X86_64
 static auto make_jmp_ff(uint8_t* src, uint8_t* dst, uint8_t* data) {
     JmpFF jmp{};
 
@@ -72,18 +58,25 @@ static auto make_jmp_ff(uint8_t* src, uint8_t* dst, uint8_t* data) {
     return jmp;
 }
 
-static void emit_jmp_ff(uint8_t* src, uint8_t* dst, uint8_t* data, size_t size = sizeof(JmpFF)) {
+[[nodiscard]] static std::expected<void, InlineHook::Error> emit_jmp_ff(
+    uint8_t* src, uint8_t* dst, uint8_t* data, size_t size = sizeof(JmpFF)) {
     if (size < sizeof(JmpFF)) {
-        return;
+        return std::unexpected{InlineHook::Error::not_enough_space(dst)};
     }
 
-    UnprotectMemory unprotect{src, size};
+    auto um = unprotect(src, size);
+
+    if (!um) {
+        return std::unexpected{InlineHook::Error::failed_to_unprotect(src)};
+    }
 
     if (size > sizeof(JmpFF)) {
         std::fill_n(src, size, static_cast<uint8_t>(0x90));
     }
 
     store(src, make_jmp_ff(src, dst, data));
+
+    return {};
 }
 #endif
 
@@ -95,30 +88,35 @@ constexpr auto make_jmp_e9(uint8_t* src, uint8_t* dst) {
     return jmp;
 }
 
-static void emit_jmp_e9(uint8_t* src, uint8_t* dst, size_t size = sizeof(JmpE9)) {
+[[nodiscard]] static std::expected<void, InlineHook::Error> emit_jmp_e9(
+    uint8_t* src, uint8_t* dst, size_t size = sizeof(JmpE9)) {
     if (size < sizeof(JmpE9)) {
-        return;
+        return std::unexpected{InlineHook::Error::not_enough_space(dst)};
     }
 
-    UnprotectMemory unprotect{src, size};
+    auto um = unprotect(src, size);
+
+    if (!um) {
+        return std::unexpected{InlineHook::Error::failed_to_unprotect(src)};
+    }
 
     if (size > sizeof(JmpE9)) {
         std::fill_n(src, size, static_cast<uint8_t>(0x90));
     }
 
     store(src, make_jmp_e9(src, dst));
+
+    return {};
 }
 
 static bool decode(ZydisDecodedInstruction* ix, uint8_t* ip) {
     ZydisDecoder decoder{};
     ZyanStatus status;
 
-#if defined(_M_X64)
+#if SAFETYHOOK_ARCH_X86_64
     status = ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
-#elif defined(_M_IX86)
+#elif SAFETYHOOK_ARCH_X86_32
     status = ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LEGACY_32, ZYDIS_STACK_WIDTH_32);
-#else
-#error "Unsupported architecture"
 #endif
 
     if (!ZYAN_SUCCESS(status)) {
@@ -161,8 +159,8 @@ InlineHook& InlineHook::operator=(InlineHook&& other) noexcept {
         m_trampoline_size = other.m_trampoline_size;
         m_original_bytes = std::move(other.m_original_bytes);
 
-        other.m_target = 0;
-        other.m_destination = 0;
+        other.m_target = nullptr;
+        other.m_destination = nullptr;
         other.m_trampoline_size = 0;
     }
 
@@ -183,11 +181,11 @@ std::expected<void, InlineHook::Error> InlineHook::setup(
     m_destination = destination;
 
     if (auto e9_result = e9_hook(allocator); !e9_result) {
-#ifdef _M_X64
+#if SAFETYHOOK_ARCH_X86_64
         if (auto ff_result = ff_hook(allocator); !ff_result) {
             return ff_result;
         }
-#else
+#elif SAFETYHOOK_ARCH_X86_32
         return e9_result;
 #endif
     }
@@ -298,36 +296,52 @@ std::expected<void, InlineHook::Error> InlineHook::e9_hook(const std::shared_ptr
     // jmp from trampoline to original.
     auto src = reinterpret_cast<uint8_t*>(&trampoline_epilogue->jmp_to_original);
     auto dst = m_target + m_original_bytes.size();
-    emit_jmp_e9(src, dst);
+
+    if (auto result = emit_jmp_e9(src, dst); !result) {
+        return std::unexpected{result.error()};
+    }
 
     // jmp from trampoline to destination.
     src = reinterpret_cast<uint8_t*>(&trampoline_epilogue->jmp_to_destination);
     dst = m_destination;
 
-#ifdef _M_X64
+#if SAFETYHOOK_ARCH_X86_64
     auto data = reinterpret_cast<uint8_t*>(&trampoline_epilogue->destination_address);
-    emit_jmp_ff(src, dst, data);
-#else
-    emit_jmp_e9(src, dst);
+
+    if (auto result = emit_jmp_ff(src, dst, data); !result) {
+        return std::unexpected{result.error()};
+    }
+#elif SAFETYHOOK_ARCH_X86_32
+    if (auto result = emit_jmp_e9(src, dst); !result) {
+        return std::unexpected{result.error()};
+    }
 #endif
+
+    std::optional<Error> error;
 
     // jmp from original to trampoline.
     execute_while_frozen(
-        [this, &trampoline_epilogue] {
-            const auto src = m_target;
-            const auto dst = reinterpret_cast<uint8_t*>(&trampoline_epilogue->jmp_to_destination);
-            emit_jmp_e9(src, dst, m_original_bytes.size());
+        [this, &trampoline_epilogue, &error] {
+            if (auto result = emit_jmp_e9(m_target,
+                    reinterpret_cast<uint8_t*>(&trampoline_epilogue->jmp_to_destination), m_original_bytes.size());
+                !result) {
+                error = result.error();
+            }
         },
-        [this](uint32_t, HANDLE, CONTEXT& ctx) {
+        [this](auto, auto, auto ctx) {
             for (size_t i = 0; i < m_original_bytes.size(); ++i) {
                 fix_ip(ctx, m_target + i, m_trampoline.data() + i);
             }
         });
 
+    if (error) {
+        return std::unexpected{*error};
+    }
+
     return {};
 }
 
-#ifdef _M_X64
+#if SAFETYHOOK_ARCH_X86_64
 std::expected<void, InlineHook::Error> InlineHook::ff_hook(const std::shared_ptr<Allocator>& allocator) {
     m_original_bytes.clear();
     m_trampoline_size = sizeof(TrampolineEpilogueFF);
@@ -366,21 +380,30 @@ std::expected<void, InlineHook::Error> InlineHook::ff_hook(const std::shared_ptr
     auto src = reinterpret_cast<uint8_t*>(&trampoline_epilogue->jmp_to_original);
     auto dst = m_target + m_original_bytes.size();
     auto data = reinterpret_cast<uint8_t*>(&trampoline_epilogue->original_address);
-    emit_jmp_ff(src, dst, data);
+
+    if (auto result = emit_jmp_ff(src, dst, data); !result) {
+        return std::unexpected{result.error()};
+    }
+
+    std::optional<Error> error;
 
     // jmp from original to trampoline.
     execute_while_frozen(
-        [this] {
-            const auto src = m_target;
-            const auto dst = m_destination;
-            const auto data = src + sizeof(JmpFF);
-            emit_jmp_ff(src, dst, data, m_original_bytes.size());
+        [this, &error] {
+            if (auto result = emit_jmp_ff(m_target, m_destination, m_target + sizeof(JmpFF), m_original_bytes.size());
+                !result) {
+                error = result.error();
+            }
         },
-        [this](uint32_t, HANDLE, CONTEXT& ctx) {
+        [this](auto, auto, auto ctx) {
             for (size_t i = 0; i < m_original_bytes.size(); ++i) {
                 fix_ip(ctx, m_target + i, m_trampoline.data() + i);
             }
         });
+
+    if (error) {
+        return std::unexpected{*error};
+    }
 
     return {};
 }
@@ -395,10 +418,11 @@ void InlineHook::destroy() {
 
     execute_while_frozen(
         [this] {
-            UnprotectMemory unprotect{m_target, m_original_bytes.size()};
-            std::copy(m_original_bytes.begin(), m_original_bytes.end(), m_target);
+            if (auto um = unprotect(m_target, m_original_bytes.size())) {
+                std::copy(m_original_bytes.begin(), m_original_bytes.end(), m_target);
+            }
         },
-        [this](uint32_t, HANDLE, CONTEXT& ctx) {
+        [this](auto, auto, auto ctx) {
             for (size_t i = 0; i < m_original_bytes.size(); ++i) {
                 fix_ip(ctx, m_trampoline.data() + i, m_target + i);
             }

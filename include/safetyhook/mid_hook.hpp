@@ -3,13 +3,17 @@
 
 #pragma once
 
+#ifndef SAFETYHOOK_USE_CXXMODULES
 #include <cstdint>
 #include <memory>
+#else
+import std.compat;
+#endif
 
-#include <safetyhook/allocator.hpp>
-#include <safetyhook/context.hpp>
-#include <safetyhook/inline_hook.hpp>
-#include <safetyhook/utility.hpp>
+#include "safetyhook/allocator.hpp"
+#include "safetyhook/context.hpp"
+#include "safetyhook/inline_hook.hpp"
+#include "safetyhook/utility.hpp"
 
 namespace safetyhook {
 
@@ -50,41 +54,41 @@ public:
 
     /// @brief Creates a new MidHook object.
     /// @param target The address of the function to hook.
-    /// @param destination The destination function.
+    /// @param destination_fn The destination function.
     /// @return The MidHook object or a MidHook::Error if an error occurred.
     /// @note This will use the default global Allocator.
     /// @note If you don't care about error handling, use the easy API (safetyhook::create_mid).
-    [[nodiscard]] static std::expected<MidHook, Error> create(void* target, MidHookFn destination);
+    [[nodiscard]] static std::expected<MidHook, Error> create(void* target, MidHookFn destination_fn);
 
     /// @brief Creates a new MidHook object.
     /// @param target The address of the function to hook.
-    /// @param destination The destination function.
+    /// @param destination_fn The destination function.
     /// @return The MidHook object or a MidHook::Error if an error occurred.
     /// @note This will use the default global Allocator.
     /// @note If you don't care about error handling, use the easy API (safetyhook::create_mid).
-    [[nodiscard]] static std::expected<MidHook, Error> create(FnPtr auto target, MidHookFn destination) {
-        return create(reinterpret_cast<void*>(target), destination);
+    [[nodiscard]] static std::expected<MidHook, Error> create(FnPtr auto target, MidHookFn destination_fn) {
+        return create(reinterpret_cast<void*>(target), destination_fn);
     }
 
     /// @brief Creates a new MidHook object with a given Allocator.
     /// @param allocator The Allocator to use.
     /// @param target The address of the function to hook.
-    /// @param destination The destination function.
+    /// @param destination_fn The destination function.
     /// @return The MidHook object or a MidHook::Error if an error occurred.
     /// @note If you don't care about error handling, use the easy API (safetyhook::create_mid).
     [[nodiscard]] static std::expected<MidHook, Error> create(
-        const std::shared_ptr<Allocator>& allocator, void* target, MidHookFn destination);
+        const std::shared_ptr<Allocator>& allocator, void* target, MidHookFn destination_fn);
 
     /// @brief Creates a new MidHook object with a given Allocator.
     /// @tparam T The type of the function to hook.
     /// @param allocator The Allocator to use.
     /// @param target The address of the function to hook.
-    /// @param destination The destination function.
+    /// @param destination_fn The destination function.
     /// @return The MidHook object or a MidHook::Error if an error occurred.
     /// @note If you don't care about error handling, use the easy API (safetyhook::create_mid).
     [[nodiscard]] static std::expected<MidHook, Error> create(
-        const std::shared_ptr<Allocator>& allocator, FnPtr auto target, MidHookFn destination) {
-        return create(allocator, reinterpret_cast<void*>(target), destination);
+        const std::shared_ptr<Allocator>& allocator, FnPtr auto target, MidHookFn destination_fn) {
+        return create(allocator, reinterpret_cast<void*>(target), destination_fn);
     }
 
     MidHook() = default;
